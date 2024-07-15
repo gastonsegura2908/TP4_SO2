@@ -1,34 +1,36 @@
 #include "DriverLib.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <string.h>
+//#includeain <time.h>
 
+#define ValTEmpQUEUE_SIZE	( 10 ) // val cola de sensores}
+#define mainCHECK_TASK_PRIORITY	( tskIDLE_PRIORITY + 3 )
+#define mainCHECK_DELAY	( ( TickType_t ) 100 / portTICK_PERIOD_MS ) // 0.1 segundos -> Frecuencia 10Hz (1/10)
 
-#include "queue.h"
-#include "semphr.h"
+// Prototipos de las tareas
+static void vTemperatureSensorTask(void *pvParameters);
+//void vReceiverTask(void *pvParameters);
 
-#include "integer.h"
-#include "PollQ.h"
-#include "semtest.h"
-#include "BlockQ.h"
+// Definición de la cola que contiene los valores de temperatura
+QueueHandle_t xValTempQueue;
 
-
-// Declaración de la función de la tarea del sensor de temperatura
-//void vTemperatureSensorTask(void *pvParameters);
+#define MAX_TEMP   40
+#define MIN_TEMP   1
 
 int main(void)
 {
-    // // Inicializar el generador de números aleatorios
-    // srand(time(NULL));
 
-    // // Crear la tarea del sensor de temperatura
-    // xTaskCreate(vTemperatureSensorTask, "Temperature Sensor", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    // // Inicializar la cola
+    xValTempQueue = xQueueCreate(ValTEmpQUEUE_SIZE, sizeof(int));
 
-    // // Iniciar el scheduler de FreeRTOS
+    // Crear las tareas
+    xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configMINIMAL_STACK_SIZE, NULL, mainCHECK_TASK_PRIORITY - 2, NULL);
+    //xTaskCreate(vReceiverTask, "Receiver", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+
+    // Iniciar el scheduler de FreeRTOS
     vTaskStartScheduler();
 
     // El código no debería llegar aquí
@@ -36,30 +38,63 @@ int main(void)
 
     return 0;
 }
-void vUART_ISR(void){
+
+static void vTemperatureSensorTask(void *pvParameters) {
+	const TickType_t xDelaySensor = mainCHECK_DELAY;
+	int temperature_value = 20;
+	while (true) {
+		/* Sensor gets temperature value */
+		if(temperature_value <= MAX_TEMP) {
+			temperature_value++;
+		} else {
+			temperature_value = MIN_TEMP;
+		}
+        
+		xQueueSend(xValTempQueue, &temperature_value, portMAX_DELAY);
+
+		vTaskDelay(xDelaySensor); // waits mainCHECK_DELAY milliseconds for 10Hz frequency
+	}
 }
-void setupTimer0(void) {
-}
-unsigned long getTimerTicks(void) {
-  	//return ulHighFrequencyTimerTicks;
-}
-// void vTemperatureSensorTask(void *pvParameters)
-// {
-//     TickType_t xLastWakeTime;
-//     const TickType_t xFrequency = pdMS_TO_TICKS(100); // Frecuencia de 10 Hz (100 ms)
 
-//     // Inicializar la variable xLastWakeTime con el tiempo actual
-//     xLastWakeTime = xTaskGetTickCount();
 
-//     for (;;)
-//     {
-//         // Generar un valor aleatorio de temperatura (por ejemplo, entre 20 y 30 grados Celsius)
-//         int temperature = rand() % 11 + 20;
+// void vTemperatureSensorTask(void *pvParameters) {
+//     float temperature;
+//     srand((unsigned int)time(NULL));
+//     const TickType_t xDelay = pdMS_TO_TICKS(100); // 10 Hz -> 100 ms
 
-//         // Imprimir el valor de temperatura
-//         printf("Temperature: %d C\n", temperature);
-
-//         // Esperar hasta el siguiente ciclo
-//         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+//     for (;;) {
+//         // Generar un valor aleatorio de temperatura entre 0 y 40
+//         temperature = (float)(rand() % 41);
+//         // Enviar el valor a la cola
+//         if (xQueueSend(xQueue, &temperature, portMAX_DELAY) != pdPASS) {
+//             printf("Failed to send to queue.\n");
+//         }
+//         // Esperar 100 ms
+//         vTaskDelay(xDelay);
 //     }
 // }
+
+void vReceiverTask(void *pvParameters) {
+    // float receivedTemperature;
+
+    // for (;;) {
+    //     // Recibir el valor de la cola
+    //     if (xQueueReceive(xQueue, &receivedTemperature, portMAX_DELAY) == pdPASS) {
+    //         // Mostrar el valor recibido
+    //         printf("Received Temperature: %.2f °C\n", receivedTemperature);
+    //     }
+    // }
+}
+
+void vUART_ISR(void) {
+    // ISR de UART
+}
+
+void setupTimer0(void) {
+    // Configuración del Timer0
+}
+
+unsigned long getTimerTicks(void) {
+    // Obtener ticks del timer
+    return 0; // ulHighFrequencyTimerTicks;
+}
