@@ -1,9 +1,12 @@
-gcc/port.o: ../../Source/portable/GCC/ARM_CM3/port.c \
- ../../Source/include/FreeRTOS.h \
+gcc/port.o: \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/portable/GCC/ARM_CM3/port.c \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/FreeRTOS.h \
  /usr/lib/gcc/arm-none-eabi/10.3.1/include/stddef.h \
  /usr/lib/gcc/arm-none-eabi/10.3.1/include/stdint.h FreeRTOSConfig.h \
- ../../Source/include/projdefs.h ../../Source/include/portable.h \
- ../../Source/include/deprecated_definitions.h \
- ../../Source/include/../../Source/portable/GCC/ARM_CM3/portmacro.h \
- ../../Source/include/mpu_wrappers.h ../../Source/include/task.h \
- ../../Source/include/list.h
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/projdefs.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/portable.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/deprecated_definitions.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/portable/GCC/ARM_CM3/portmacro.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/mpu_wrappers.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/task.h \
+ /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/list.h
