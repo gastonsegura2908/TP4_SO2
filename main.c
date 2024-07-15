@@ -29,12 +29,20 @@ int main(void)
     // xTaskCreate(vTemperatureSensorTask, "Temperature Sensor", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 
     // // Iniciar el scheduler de FreeRTOS
-    // vTaskStartScheduler();
+    vTaskStartScheduler();
 
     // El código no debería llegar aquí
-    for (;;);
-}
+    //for (;;);
 
+    return 0;
+}
+void vUART_ISR(void){
+}
+void setupTimer0(void) {
+}
+unsigned long getTimerTicks(void) {
+  	//return ulHighFrequencyTimerTicks;
+}
 // void vTemperatureSensorTask(void *pvParameters)
 // {
 //     TickType_t xLastWakeTime;

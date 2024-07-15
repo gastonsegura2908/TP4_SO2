@@ -1,5 +1,4 @@
-gcc/heap_1.o: \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/portable/MemMang/heap_1.c \
+gcc/heap_1.o: ../../Source/portable/MemMang/heap_1.c \
  /usr/include/newlib/stdlib.h /usr/include/newlib/machine/ieeefp.h \
  /usr/include/newlib/_ansi.h /usr/include/newlib/newlib.h \
  /usr/include/newlib/_newlib_version.h /usr/include/newlib/sys/config.h \
@@ -10,12 +9,10 @@ gcc/heap_1.o: \
  /usr/include/newlib/machine/_default_types.h \
  /usr/include/newlib/sys/lock.h /usr/include/newlib/sys/cdefs.h \
  /usr/include/newlib/machine/stdlib.h /usr/include/newlib/alloca.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/FreeRTOS.h \
+ ../../Source/include/FreeRTOS.h \
  /usr/lib/gcc/arm-none-eabi/10.3.1/include/stdint.h FreeRTOSConfig.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/projdefs.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/portable.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/deprecated_definitions.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/portable/GCC/ARM_CM3/portmacro.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/mpu_wrappers.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/task.h \
- /home/gaston/Descargas/FreeRTOSv202212.01/FreeRTOS/Source/include/list.h
+ ../../Source/include/projdefs.h ../../Source/include/portable.h \
+ ../../Source/include/deprecated_definitions.h \
+ ../../Source/include/../../Source/portable/GCC/ARM_CM3/portmacro.h \
+ ../../Source/include/mpu_wrappers.h ../../Source/include/task.h \
+ ../../Source/include/list.h
