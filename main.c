@@ -21,17 +21,21 @@ static void vDisplayTask(void *pvParameters);
 int getN(void);
 void setN(int new_N);
 void updateArray(int[], int, int);
+void reverse(char str[], int length);
+char* itoa(int num, char* str, int base);
+char* bitMapping(int);
 
 // Definición de la cola que contiene los valores de temperatura
 QueueHandle_t xValTempQueue;
 QueueHandle_t xValFilterQueue;
-QueueHandle_t xDisplayQueue;
+//QueueHandle_t xDisplayQueue;
 
 static int N_filter;
 
 #define N_ARRAY    40
 #define MAX_TEMP   40
 #define MIN_TEMP   1
+#define DISPLAY_COLUMNS  96
 
 int main(void)
 {
@@ -43,7 +47,7 @@ int main(void)
     // Inicializar la cola
     xValTempQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
     xValFilterQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
-    xDisplayQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
+    //xDisplayQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
 
     // Crear las tareas
     xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configSENSOR_STACK_SIZE, NULL, mainCHECK_TASK_PRIORITY - 2, NULL);
@@ -95,7 +99,7 @@ static void vReceiverTask(void *pvParameters) {
         avg_temp = accum / getN();
         
         xQueueSend(xValFilterQueue, &avg_temp, portMAX_DELAY);
-        xQueueSend(xDisplayQueue, &avg_temp, portMAX_DELAY);
+        //xQueueSend(xDisplayQueue, &avg_temp, portMAX_DELAY);
     }
 }
 
@@ -140,27 +144,40 @@ static void prvSetupHardware( void )
 /*-----------------------------------------------------------*/
 
 static void vDisplayTask(void *pvParameters) {
-    int display_temp_value;
-    char display_str[20];
+	/* create array with latest filtered values */
+  	int filtered_array[DISPLAY_COLUMNS] = {};
 
-    // Initialize the display
-    OSRAMInit(false);
+	/* initialize array with minimum temperature value */
+  	for (int i = 0 ; i < DISPLAY_COLUMNS; i++) {
+    	filtered_array[i] = MIN_TEMP;
+  	}
 
-    while (true) {
-        xQueueReceive(xDisplayQueue, &display_temp_value, portMAX_DELAY);
+	int new_filtered_value;
 
-        // Clear the display
-        OSRAMClear();
+	while (true) {
+		xQueueReceive(xValFilterQueue, &new_filtered_value, portMAX_DELAY);
 
-        // Format the temperature value
-        //snprintf(display_str, sizeof(display_str), "Temp: %dC", display_temp_value);
+		/* stores the conversion int to char */
+		char str[2] = {};
 
-        // Display the temperature value
-        OSRAMStringDraw(display_str, 0, 0);
+		/* update array with new filtered value */
+		updateArray(filtered_array, DISPLAY_COLUMNS, new_filtered_value);
 
-        // Small delay to avoid flickering
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
+		/* clear display */
+		OSRAMClear();
+
+		for (int i = DISPLAY_COLUMNS - 1; i > 0; i--) {
+			/* draw N of filter value */
+			OSRAMStringDraw(itoa(filtered_array[i], str, 10), 0, 1);
+
+			/* draw temperature filtered value */
+			OSRAMStringDraw(itoa(getN(), str, 10), 0, 0);
+
+			/* draw graphic on the display */
+			int bit_map_half = filtered_array[DISPLAY_COLUMNS - i] >= 20 ? 0 : 1;
+			OSRAMImageDraw(bitMapping(filtered_array[DISPLAY_COLUMNS - i]), i+10, bit_map_half , 1, 1);
+		}
+	}
 }
 
 void setN(int new_N) {
@@ -178,6 +195,93 @@ void updateArray(int array[], int size, int new_value) {
     }
     array[0] = new_value;
 }
+
+// A utility function to reverse a string
+void reverse(char str[], int length){
+    int start = 0;
+    int end = length - 1;
+    while (start < end) {
+        char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+        end--;
+        start++;
+    }
+}
+
+/* Convert integer to string: implementation of stdio itoa()*/
+char* itoa(int num, char* str, int base){
+    int i = 0;
+    int isNegative = 0;
+ 
+    /* Handle 0 explicitly, otherwise empty string is
+     * printed for 0 */
+    if (num == 0) {
+        str[i++] = '0';
+        str[i] = '\0';
+        return str;
+    }
+ 
+    // In standard itoa(), negative numbers are handled
+    // only with base 10. Otherwise numbers are
+    // considered unsigned.
+    if (num < 0 && base == 10) {
+        isNegative = 1;
+        num = -num;
+    }
+ 
+    // Process individual digits
+    while (num != 0) {
+        int rem = num % base;
+        str[i++] = (rem > 9) ? (rem - 10) + 'a' : rem + '0';
+        num = num / base;
+    }
+ 
+    // If number is negative, append '-'
+    if (isNegative)
+        str[i++] = '-';
+ 
+    str[i] = '\0'; // Append string terminator
+ 
+    // Reverse the string
+    reverse(str, i);
+ 
+ 
+    return str;
+}
+
+
+/* Map each temperature value with a pixel in the display */
+char* bitMapping(int valor) {
+	if ((valor <= 13) || (valor == 20)) {
+		return "@";
+	}
+
+	if ((valor == 14) || (valor == 21)) {
+		return " ";
+	}
+
+	if ((valor == 15) || (valor == 22)) {
+		return "";
+	}
+
+	if ((valor == 16) || (valor == 23)){
+		return "";
+	}
+
+	if ((valor == 17) || (valor == 24)){
+		return "";
+	}
+
+	if ((valor == 18) || (valor == 25)) {
+		return "";
+	}
+
+	if ((valor == 19) || (valor == 26)) {
+		return "";
+	}
+}
+
 
 void vUART_ISR(void) {
     // ISR de UART
