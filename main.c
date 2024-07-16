@@ -2,88 +2,102 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
-#include <stdio.h>
-#include <stdlib.h>
-//#includeain <time.h>
 
-#define ValTEmpQUEUE_SIZE	( 10 ) // val cola de sensores}
-#define mainCHECK_TASK_PRIORITY	( tskIDLE_PRIORITY + 3 )
-#define mainCHECK_DELAY	( ( TickType_t ) 100 / portTICK_PERIOD_MS ) // 0.1 segundos -> Frecuencia 10Hz (1/10)
+#define ValTempQUEUE_SIZE    (10) // val cola de sensores
+#define mainCHECK_TASK_PRIORITY    (tskIDLE_PRIORITY + 3)
+#define mainCHECK_DELAY    ( ( TickType_t ) 100 / portTICK_PERIOD_MS ) // 0.1 segundos -> Frecuencia 10Hz (1/10)
+#define N 5 // Número de mediciones para el filtro pasa bajos
 
 // Prototipos de las tareas
 static void vTemperatureSensorTask(void *pvParameters);
-//void vReceiverTask(void *pvParameters);
+static void vReceiverTask(void *pvParameters);
+
+int getN(void);
+void setN(int new_N);
+void updateArray(int[], int, int);
 
 // Definición de la cola que contiene los valores de temperatura
 QueueHandle_t xValTempQueue;
+QueueHandle_t xValFilterQueue;
 
+static int N_filter;
+
+#define N_ARRAY    20
 #define MAX_TEMP   40
 #define MIN_TEMP   1
 
 int main(void)
 {
-
-    // // Inicializar la cola
-    xValTempQueue = xQueueCreate(ValTEmpQUEUE_SIZE, sizeof(int));
+    setN(15);
+    // Inicializar la cola
+    xValTempQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
+    xValFilterQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
 
     // Crear las tareas
     xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configMINIMAL_STACK_SIZE, NULL, mainCHECK_TASK_PRIORITY - 2, NULL);
-    //xTaskCreate(vReceiverTask, "Receiver", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+    xTaskCreate(vReceiverTask, "Filter", configMINIMAL_STACK_SIZE, NULL, mainCHECK_TASK_PRIORITY - 2, NULL);
 
     // Iniciar el scheduler de FreeRTOS
     vTaskStartScheduler();
 
     // El código no debería llegar aquí
-    //for (;;);
-
     return 0;
 }
 
 static void vTemperatureSensorTask(void *pvParameters) {
-	const TickType_t xDelaySensor = mainCHECK_DELAY;
-	int temperature_value = 20;
-	while (true) {
-		/* Sensor gets temperature value */
-		if(temperature_value <= MAX_TEMP) {
-			temperature_value++;
-		} else {
-			temperature_value = MIN_TEMP;
-		}
-        
-		xQueueSend(xValTempQueue, &temperature_value, portMAX_DELAY);
+    const TickType_t xDelaySensor = mainCHECK_DELAY;
+    int temperature_value = 15;
+    while (true) {
+        /* Sensor gets temperature value */
+        if (temperature_value <= MAX_TEMP) {
+            temperature_value++;
+        } else {
+            temperature_value = MIN_TEMP;
+        }
 
-		vTaskDelay(xDelaySensor); // waits mainCHECK_DELAY milliseconds for 10Hz frequency
-	}
+        xQueueSend(xValTempQueue, &temperature_value, portMAX_DELAY);
+
+        vTaskDelay(xDelaySensor); // waits mainCHECK_DELAY milliseconds for 10Hz frequency
+    }
 }
 
+static void vReceiverTask(void *pvParameters) {
+  	int new_temp_value; // value read from sensor
+  	int avg_temp;
 
-// void vTemperatureSensorTask(void *pvParameters) {
-//     float temperature;
-//     srand((unsigned int)time(NULL));
-//     const TickType_t xDelay = pdMS_TO_TICKS(100); // 10 Hz -> 100 ms
+	/* create array to store latest temperature values read */
+  	int temperature_array[N_ARRAY] = {};
 
-//     for (;;) {
-//         // Generar un valor aleatorio de temperatura entre 0 y 40
-//         temperature = (float)(rand() % 41);
-//         // Enviar el valor a la cola
-//         if (xQueueSend(xQueue, &temperature, portMAX_DELAY) != pdPASS) {
-//             printf("Failed to send to queue.\n");
-//         }
-//         // Esperar 100 ms
-//         vTaskDelay(xDelay);
-//     }
-// }
+  	while (true) {
+    	xQueueReceive(xValTempQueue, &new_temp_value, portMAX_DELAY);
 
-void vReceiverTask(void *pvParameters) {
-    // float receivedTemperature;
+		/* add new temperature value to array */
+    	updateArray(temperature_array, N_ARRAY, new_temp_value);
 
-    // for (;;) {
-    //     // Recibir el valor de la cola
-    //     if (xQueueReceive(xQueue, &receivedTemperature, portMAX_DELAY) == pdPASS) {
-    //         // Mostrar el valor recibido
-    //         printf("Received Temperature: %.2f °C\n", receivedTemperature);
-    //     }
-    // }
+		/* Calculate average */
+		int accum = 0;
+		for (int i = 0; i < getN(); i++) {
+			accum += temperature_array[i];
+		}
+		avg_temp = accum / getN();
+        
+		xQueueSend(xValFilterQueue, &avg_temp, portMAX_DELAY);
+  	}
+}
+
+void setN(int new_N) {
+	N_filter = new_N;
+}
+
+int getN(void) {
+	return N_filter;
+}
+/* Update array with new value and dismiss the oldest value */
+void updateArray(int array[], int size, int new_value) {
+	for(int i = size - 1; i > 0; i--) {
+		array[i] = array[i-1];
+	}
+	array[0] = new_value;
 }
 
 void vUART_ISR(void) {
