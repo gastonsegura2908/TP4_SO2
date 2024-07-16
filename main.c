@@ -3,11 +3,18 @@
 #include "task.h"
 #include "queue.h"
 
-#define ValTempQUEUE_SIZE    (40) // val cola de sensores
+#include "semphr.h"
+#include "integer.h"
+#include "PollQ.h"
+#include "semtest.h"
+#include "BlockQ.h"
+#include <string.h>
+
+#define ValTempQUEUE_SIZE    (20) // val cola de sensores
 #define mainCHECK_TASK_PRIORITY    (tskIDLE_PRIORITY + 3)
 #define mainCHECK_DELAY    ( ( TickType_t ) 100 / portTICK_PERIOD_MS ) // 0.1 segundos -> Frecuencia 10Hz (1/10)
 //#define N 5 // Número de mediciones para el filtro pasa bajos
-#define mainPUSH_BUTTON             GPIO_PIN_4 /* Demo board specifics. */
+//#define mainPUSH_BUTTON             GPIO_PIN_4 /* Demo board specifics. */
 #define mainBAUD_RATE				( 19200 ) /* UART configuration - note this does not use the FIFO so is not very efficient. */
 #define mainFIFO_SET					( 0x10 )
 
@@ -32,9 +39,9 @@ QueueHandle_t xValFilterQueue;
 
 static int N_filter;
 
-#define N_ARRAY    40
-#define MAX_TEMP   40
-#define MIN_TEMP   1
+#define N_ARRAY    20
+#define MAX_TEMP   30
+#define MIN_TEMP   10
 #define DISPLAY_COLUMNS  96
 
 int main(void)
@@ -42,12 +49,15 @@ int main(void)
     /* Configure the clocks, UART and GPIO. */
 	prvSetupHardware();
 
-    setN(10);
-    
     // Inicializar la cola
     xValTempQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
     xValFilterQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
     //xDisplayQueue = xQueueCreate(ValTempQUEUE_SIZE, sizeof(int));
+
+    setN(10);
+    
+    /* Initialise the LCD> */
+    OSRAMInit( false );
 
     // Crear las tareas
     xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configSENSOR_STACK_SIZE, NULL, mainCHECK_TASK_PRIORITY - 2, NULL);
@@ -106,40 +116,42 @@ static void vReceiverTask(void *pvParameters) {
 static void prvSetupHardware( void )
 {
 	/* Setup the PLL. */
-	SysCtlClockSet( SYSCTL_SYSDIV_10 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_6MHZ );
+	//SysCtlClockSet( SYSCTL_SYSDIV_10 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_6MHZ );
 
 	/* Setup the push button. */
-	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
-    GPIODirModeSet(GPIO_PORTC_BASE, mainPUSH_BUTTON, GPIO_DIR_MODE_IN);
-	GPIOIntTypeSet( GPIO_PORTC_BASE, mainPUSH_BUTTON,GPIO_FALLING_EDGE );
-	IntPrioritySet( INT_GPIOC, configKERNEL_INTERRUPT_PRIORITY );
-	GPIOPinIntEnable( GPIO_PORTC_BASE, mainPUSH_BUTTON );
-	IntEnable( INT_GPIOC );
+	//SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+    //GPIODirModeSet(GPIO_PORTC_BASE, mainPUSH_BUTTON, GPIO_DIR_MODE_IN);
+	//GPIOIntTypeSet( GPIO_PORTC_BASE, mainPUSH_BUTTON,GPIO_FALLING_EDGE );
+	//IntPrioritySet( INT_GPIOC, configKERNEL_INTERRUPT_PRIORITY );
+	//GPIOPinIntEnable( GPIO_PORTC_BASE, mainPUSH_BUTTON );
+	//IntEnable( INT_GPIOC );
 
 	/* Enable the UART.  */
 	SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+	//SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
-	/* Set GPIO A0 and A1 as peripheral function.  They are used to output the
-	UART signals. */
-	GPIODirModeSet( GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_DIR_MODE_HW );
+	/* Set GPIO A0 and A1 as peripheral function.  They are used to output the UART signals. */
+	//GPIODirModeSet( GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_DIR_MODE_HW );
 
 	/* Configure the UART for 8-N-1 operation. */
-	UARTConfigSet( UART0_BASE, mainBAUD_RATE, UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE );
+	UARTConfigSet( UART0_BASE, mainBAUD_RATE, (UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE ));
 
-	/* We don't want to use the fifo.  This is for test purposes to generate
-	as many interrupts as possible. */
-	HWREG( UART0_BASE + UART_O_LCR_H ) &= ~mainFIFO_SET;
+
+  	UARTIntEnable(UART0_BASE, UART_INT_RX); // NEW
+  	UARTIntEnable(UART0_BASE, UART_INT_TX); // NEW
+	/* We don't want to use the fifo.  This is for test purposes to generate as many interrupts as possible. */
+	//HWREG( UART0_BASE + UART_O_LCR_H ) &= ~mainFIFO_SET;
 
 	/* Enable Tx interrupts. */
 	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;
+    HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX; // NEW
+
 	IntPrioritySet( INT_UART0, configKERNEL_INTERRUPT_PRIORITY );
 	IntEnable( INT_UART0 );
 
-	/* Initialise the LCD> */
-    OSRAMInit( false );
+
     //OSRAMStringDraw("www.FreeRTOS.org", 0, 0);
-	OSRAMStringDraw("LM3S811 demo", 16, 1);
+	//OSRAMStringDraw("LM3S811 demo", 16, 1);
 }
 /*-----------------------------------------------------------*/
 
