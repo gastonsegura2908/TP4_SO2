@@ -54,10 +54,11 @@
 #define configMAX_PRIORITIES		                5
 
 /* Stack sizes for each task */
-#define configSENSOR_STACK_SIZE                   ((unsigned short) (38))
-#define configFILTER_STACK_SIZE                   ((unsigned short) (62))
-#define configDISPLAY_STACK_SIZE                  ((unsigned short) (145))
+#define configSENSOR_STACK_SIZE                   ((unsigned short) (40))
+#define configFILTER_STACK_SIZE                   ((unsigned short) (65)) 
+#define configDISPLAY_STACK_SIZE                  ((unsigned short) (150)) 
 #define configTOP_STACK_SIZE                      ((unsigned short) (56))
+#define configMONITOR_STACK_SIZE                  ((unsigned short) (256))
 
 #define configGENERATE_RUN_TIME_STATS             1
 #define configSUPPORT_DYNAMIC_ALLOCATION          1

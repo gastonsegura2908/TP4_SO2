@@ -31,6 +31,8 @@ static void vTemperatureSensorTask(void *pvParameters);
 static void vReceiverTask(void *pvParameters);
 static void vDisplayTask(void *pvParameters);
 
+static void vMonitorTask(void *pvParameters);
+
 int getN(void);
 void setN(int new_N);
 void updateArray(int[], int, int);
@@ -50,6 +52,11 @@ QueueHandle_t xValFilterQueue;
 static int N_filter;
 static volatile char *pcNextChar;
 unsigned long ulHighFrequencyTimerTicks;
+
+// Declaración de los manejadores de las tareas
+static TaskHandle_t xHandleSensorTask = NULL;
+static TaskHandle_t xHandleReceiverTask = NULL;
+static TaskHandle_t xHandleDisplayTask = NULL;
 
 #define N_ARRAY    20
 #define MAX_TEMP   30
@@ -73,9 +80,12 @@ int main(void)
 
   	//OSRAMStringDraw("", 16, 1);
     // Crear las tareas
-    xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configSENSOR_STACK_SIZE, NULL, SENSOR_TASK_PRIORITY, NULL);
-    xTaskCreate(vReceiverTask, "Filter", configFILTER_STACK_SIZE, NULL, RECEIVER_TASK_PRIORITY, NULL);
-    xTaskCreate(vDisplayTask, "Display", configDISPLAY_STACK_SIZE, NULL, DISPLAY_TASK_PRIORITY, NULL);
+    xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configSENSOR_STACK_SIZE, NULL, SENSOR_TASK_PRIORITY,  &xHandleSensorTask);
+    xTaskCreate(vReceiverTask, "Filter", configFILTER_STACK_SIZE, NULL, RECEIVER_TASK_PRIORITY, &xHandleReceiverTask);
+    xTaskCreate(vDisplayTask, "Display", configDISPLAY_STACK_SIZE, NULL, DISPLAY_TASK_PRIORITY, &xHandleDisplayTask);
+
+	xTaskCreate(vMonitorTask, "Monitor", configMONITOR_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+
 
     // Iniciar el scheduler de FreeRTOS
     vTaskStartScheduler();
@@ -143,24 +153,31 @@ static void prvSetupHardware( void )
 	SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
 	//SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);// new new
+	GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);// new new
+
+
 	/* Set GPIO A0 and A1 as peripheral function.  They are used to output the UART signals. */
 	//GPIODirModeSet( GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_DIR_MODE_HW );
 
+
 	/* Configure the UART for 8-N-1 operation.baudios.8 bits de datos, sin paridad y 1 bit de parada */
-	UARTConfigSet( UART0_BASE, mainBAUD_RATE, (UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE ));
+	//UARTConfigSet( UART0_BASE, mainBAUD_RATE, (UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE )); // NEW
+	UARTConfigSet(UART0_BASE, mainBAUD_RATE,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
+  	//UARTIntEnable(UART0_BASE, UART_INT_RX); // NEW
+  	//UARTIntEnable(UART0_BASE, UART_INT_TX); // NEW
 
-  	UARTIntEnable(UART0_BASE, UART_INT_RX); // NEW
-  	UARTIntEnable(UART0_BASE, UART_INT_TX); // NEW
 	/* We don't want to use the fifo.  This is for test purposes to generate as many interrupts as possible. */
 	//HWREG( UART0_BASE + UART_O_LCR_H ) &= ~mainFIFO_SET;
 
 	/* Enable Tx interrupts. */
-	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;
-    HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX; // NEW
+	//HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;  // NEW
+    //HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX; // NEW
 
-	IntPrioritySet( INT_UART0, configKERNEL_INTERRUPT_PRIORITY );
-	IntEnable( INT_UART0 );
+	//IntPrioritySet( INT_UART0, configKERNEL_INTERRUPT_PRIORITY );  // NEW
+	//IntEnable( INT_UART0 );  // NEW
 
 
     //OSRAMStringDraw("www.FreeRTOS.org", 0, 0);
@@ -398,4 +415,38 @@ void Timer0IntHandler(void) {
 /* Get timer Ticks */
 unsigned long getTimerTicks(void) {
   	return ulHighFrequencyTimerTicks;
+}
+
+static void vMonitorTask(void *pvParameters) {
+    char buffer[50];
+    UBaseType_t uxHighWaterMarkSensor, uxHighWaterMarkReceiver, uxHighWaterMarkDisplay;
+
+    for (;;) {
+		// Obtén el high water mark de cada tarea
+        uxHighWaterMarkSensor = uxTaskGetStackHighWaterMark(xHandleSensorTask);
+        uxHighWaterMarkReceiver = uxTaskGetStackHighWaterMark(xHandleReceiverTask);
+        uxHighWaterMarkDisplay = uxTaskGetStackHighWaterMark(xHandleDisplayTask);
+
+        // Enviar uso de la pila de la tarea del sensor
+        itoa(uxHighWaterMarkSensor, buffer, 10);
+        sendUART0("Sensor Task Stack High Water Mark: ");
+        sendUART0(buffer);
+        sendUART0("\n");
+
+        // Enviar uso de la pila de la tarea del receptor
+        itoa(uxHighWaterMarkReceiver, buffer, 10);
+        sendUART0("Receiver Task Stack High Water Mark: ");
+        sendUART0(buffer);
+        sendUART0("\n");
+
+        // Enviar uso de la pila de la tarea de display
+        itoa(uxHighWaterMarkDisplay, buffer, 10);
+        sendUART0("Display Task Stack High Water Mark: ");
+        sendUART0(buffer);
+        sendUART0("\n");
+		sendUART0("--------------------------------------");
+		sendUART0("\n");
+        // Espera un tiempo antes de volver a verificar
+        vTaskDelay(pdMS_TO_TICKS(10000)); // Verificar cada 10 segundos
+    }
 }
