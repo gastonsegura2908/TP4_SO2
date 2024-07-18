@@ -56,7 +56,6 @@ QueueHandle_t xValFilterQueue;
 static int N_filter;
 static volatile char *pcNextChar;
 unsigned long ulHighFrequencyTimerTicks;
-TaskStatus_t *pxTaskStatusArray;
 
 // Declaración de los manejadores de las tareas
 static TaskHandle_t xHandleSensorTask = NULL;
@@ -153,11 +152,11 @@ static void prvSetupHardware( void )
 
 	/* Enable the UART interrupt. */
   	UARTIntEnable(UART0_BASE, UART_INT_RX);
-  	UARTIntEnable(UART0_BASE, UART_INT_TX);
+  	//UARTIntEnable(UART0_BASE, UART_INT_TX);
 
 	/* Set priority for UART interrupt. */
-	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;
-	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX;
+	//HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;
+	//HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX;
 	IntPrioritySet(INT_UART0, configKERNEL_INTERRUPT_PRIORITY);
 	IntEnable(INT_UART0);
 }
@@ -311,31 +310,32 @@ char* bitMapping(int valor) {
 
 void vUART_ISR(void){
 	unsigned long ulStatus;
-
+	//sendUART0("\r\ncambio de N\r\n");// sacar
 	/* What caused the interrupt. */
 	ulStatus = UARTIntStatus( UART0_BASE, pdTRUE );
 
 	/* Clear the interrupt. */
 	UARTIntClear( UART0_BASE, ulStatus );
 
-	/* Was a Tx interrupt pending? */
-	if( ulStatus & UART_INT_TX )
-	{
-		/* Send the next character in the string.  We are not using the FIFO. */
-		if( *pcNextChar != 0 )
-		{
-			if( !( HWREG( UART0_BASE + UART_O_FR ) & UART_FR_TXFF ) )
-			{
-				HWREG( UART0_BASE + UART_O_DR ) = *pcNextChar;
-			}
-			pcNextChar++;
-		}
-	}
-	/* Was a Rx interrupt pending? */
-    else if (ulStatus & UART_INT_RX) {
+	// /* Was a Tx interrupt pending? */
+	// if( ulStatus & UART_INT_TX )
+	// {
+	// 	/* Send the next character in the string.  We are not using the FIFO. */
+	// 	if( *pcNextChar != 0 )
+	// 	{
+	// 		if( !( HWREG( UART0_BASE + UART_O_FR ) & UART_FR_TXFF ) )
+	// 		{
+	// 			HWREG( UART0_BASE + UART_O_DR ) = *pcNextChar;
+	// 		}
+	// 		pcNextChar++;
+	// 	}
+	// }
+	// /* Was a Rx interrupt pending? */
+    // else 
+	if (ulStatus & UART_INT_RX) {
         signed char input;
-        portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-
+        //portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+		//sendUART0("\r\ncaracter recibido\r\n"); // sacar
         /* A character was received.  Place it in the queue of received characters. */
         input = UARTCharGet(UART0_BASE);
         if (input == '+' && getN() < N_ARRAY) {
@@ -349,7 +349,7 @@ void vUART_ISR(void){
 		else {
 			sendUART0("\r\nCan't permform that operation on N, limit reached \r\n");
 		}
-        portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
+        //portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
     }
 }
 
@@ -396,6 +396,8 @@ unsigned long getTimerTicks(void) {
 
 
 static void vTopTask(void *pvParameters) {
+	TaskStatus_t *pxTaskStatusArray;
+
 	/*  obtiene el número total de tareas actualmente activas en el sistema.*/
 	UBaseType_t uxArraySize = uxTaskGetNumberOfTasks();
 
