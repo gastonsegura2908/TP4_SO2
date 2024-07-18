@@ -10,7 +10,6 @@
 #include "BlockQ.h"
 #include <string.h>
 
-#define ValTempQUEUE_SIZE    (20) // val cola de sensores
 #define SENSOR_TASK_PRIORITY    (tskIDLE_PRIORITY + 1)
 #define RECEIVER_TASK_PRIORITY  (tskIDLE_PRIORITY + 2)
 #define DISPLAY_TASK_PRIORITY   (tskIDLE_PRIORITY + 3)
@@ -63,10 +62,12 @@ static TaskHandle_t xHandleReceiverTask = NULL;
 static TaskHandle_t xHandleDisplayTask = NULL;
 static TaskHandle_t xHandleUartTask = NULL;
 
-#define N_ARRAY    20
+#define DISPLAY_COLUMNS  96
 #define MAX_TEMP   30
 #define MIN_TEMP   10
-#define DISPLAY_COLUMNS  96
+#define N_ARRAY    (MAX_TEMP-MIN_TEMP) // valor del arreglo de temperaturas
+#define VAL_MEDIO (MAX_TEMP-MIN_TEMP) // valor de la mitad de la pantallla
+#define ValTempQUEUE_SIZE    ((MAX_TEMP-MIN_TEMP)) // valor de cola de sensor
 
 int main(void)
 {
@@ -163,11 +164,11 @@ static void prvSetupHardware( void )
 /*-----------------------------------------------------------*/
 
 static void vDisplayTask(void *pvParameters) {
-	OSRAMStringDraw("SO 2 - TP4", 20, 0);
+	OSRAMStringDraw("SO 2 - TP4", 18, 0);
     // Esperar 2 segundos
     vTaskDelay(mainDISPLAY_DELAY);
     // Limpiar el display
-    OSRAMClear();
+    //OSRAMClear();
 
 	/* create array with latest filtered values */
   	int filtered_array[DISPLAY_COLUMNS] = {};
@@ -192,15 +193,15 @@ static void vDisplayTask(void *pvParameters) {
 		OSRAMClear();
 
 		for (int i = DISPLAY_COLUMNS - 1; i > 0; i--) {
-			/* draw N of filter value */
-			OSRAMStringDraw(itoa(filtered_array[i], str, 10), 0, 1);
-
-			/* draw temperature filtered value */
+			/* draw N of filter value en bloque superior*/
 			OSRAMStringDraw(itoa(getN(), str, 10), 0, 0);
 
+			/* draw temperature filtered value en bloque inferior*/
+			OSRAMStringDraw(itoa(filtered_array[i], str, 10), 0, 1);
+
 			/* draw graphic on the display */
-			int bit_map_half = filtered_array[DISPLAY_COLUMNS - i] >= 20 ? 0 : 1;
-			OSRAMImageDraw(bitMapping(filtered_array[DISPLAY_COLUMNS - i]), i+10, bit_map_half , 1, 1);
+			int bit_map_half = filtered_array[DISPLAY_COLUMNS - i] >= VAL_MEDIO ? 0 : 1;
+			OSRAMImageDraw(bitMapping(filtered_array[DISPLAY_COLUMNS - i]), i+11, bit_map_half , 1, 1);
 		}
 	}
 }
@@ -278,8 +279,39 @@ char* itoa(int num, char* str, int base){
 
 /* Map each temperature value with a pixel in the display */
 char* bitMapping(int valor) {
+	// if ((valor <= 11) || (valor == 20) || (valor == 21)) {
+	// 	return "\200"; // 10000000
+	// }
+
+	// if ((valor == 12) || (valor == 22)) {
+	// 	return "\100"; // 01000000
+	// }
+
+	// if ((valor == 13) || (valor == 23)) {
+	// 	return "\040"; // 00100000
+	// }
+
+	// if ((valor == 14) || (valor == 24)){
+	// 	return "\020"; // 00010000
+	// }
+
+	// if ((valor == 15) || (valor == 25)){
+	// 	return "\010"; // 00001000
+	// }
+
+	// if ((valor == 16) || (valor == 26)) {
+	// 	return "\004"; // 00000100
+	// }
+
+	// if ((valor == 17) || (valor == 27)) {
+	// 	return "\002"; // 00000010
+	// }	
+	
+	// if ((valor == 18) || (valor == 19) || (valor == 28) || (valor == 29)) {
+	// 	return "\001"; // 00000001
+	// }	
 	if ((valor <= 13) || (valor == 20)) {
-		return "@";
+		return "\100"; // 01000000
 	}
 
 	if ((valor == 14) || (valor == 21)) {
@@ -287,23 +319,23 @@ char* bitMapping(int valor) {
 	}
 
 	if ((valor == 15) || (valor == 22)) {
-		return "";
+		return "\020"; // 00010000
 	}
 
 	if ((valor == 16) || (valor == 23)){
-		return "";
+		return "\010"; // 00001000
 	}
 
 	if ((valor == 17) || (valor == 24)){
-		return "";
+		return "\004"; // 00000100
 	}
 
 	if ((valor == 18) || (valor == 25)) {
-		return "";
+		return "\002"; // 00000010
 	}
 
 	if ((valor == 19) || (valor == 26)) {
-		return "";
+		return "\001"; // 00000001
 	}
 }
 
