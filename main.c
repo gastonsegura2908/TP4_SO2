@@ -3,20 +3,22 @@
 #include "task.h"
 #include "queue.h"
 
-// #include "semphr.h"
-// #include "integer.h"
-// #include "PollQ.h"
-// #include "semtest.h"
-// #include "BlockQ.h"
-// #include <string.h>
+#include "semphr.h"
+#include "integer.h"
+#include "PollQ.h"
+#include "semtest.h"
+#include "BlockQ.h"
+#include <string.h>
 
 #define ValTempQUEUE_SIZE    (20) // val cola de sensores
-//#define mainCHECK_TASK_PRIORITY    (tskIDLE_PRIORITY + 3)
 #define SENSOR_TASK_PRIORITY    (tskIDLE_PRIORITY + 1)
 #define RECEIVER_TASK_PRIORITY  (tskIDLE_PRIORITY + 2)
 #define DISPLAY_TASK_PRIORITY   (tskIDLE_PRIORITY + 3)
+#define UART_TASK_PRIORITY (tskIDLE_PRIORITY + 4) // ver valor
+#define TOP_TASK_PRIORITY  (tskIDLE_PRIORITY + 5) // ver valor
 #define mainSENSOR_DELAY    ( ( TickType_t ) 100 / portTICK_PERIOD_MS ) // 0.1 segundos -> Frecuencia 10Hz (1/10)
 #define mainDISPLAY_DELAY   ( ( TickType_t ) 2000 / portTICK_PERIOD_MS ) // 2 segundos
+#define mainTOP_DELAY       ( ( TickType_t ) 5000 / portTICK_PERIOD_MS ) // 5 segundos
 
 //#define N 5 // Número de mediciones para el filtro pasa bajos
 //#define mainPUSH_BUTTON             GPIO_PIN_4 /* Demo board specifics. */
@@ -30,6 +32,8 @@ static void prvSetupHardware( void );
 static void vTemperatureSensorTask(void *pvParameters);
 static void vReceiverTask(void *pvParameters);
 static void vDisplayTask(void *pvParameters);
+//static void vUartTask(void *pvParameters);
+static void vTopTask(void *);
 
 static void vMonitorTask(void *pvParameters);
 
@@ -44,7 +48,7 @@ unsigned long getTimerTicks(void);
 void sendUART0(const char *);
 
 
-// Definición de la cola que contiene los valores de temperatura
+// Definición de las colas
 QueueHandle_t xValTempQueue;
 QueueHandle_t xValFilterQueue;
 //QueueHandle_t xDisplayQueue;
@@ -52,11 +56,13 @@ QueueHandle_t xValFilterQueue;
 static int N_filter;
 static volatile char *pcNextChar;
 unsigned long ulHighFrequencyTimerTicks;
+TaskStatus_t *pxTaskStatusArray;
 
 // Declaración de los manejadores de las tareas
 static TaskHandle_t xHandleSensorTask = NULL;
 static TaskHandle_t xHandleReceiverTask = NULL;
 static TaskHandle_t xHandleDisplayTask = NULL;
+static TaskHandle_t xHandleUartTask = NULL;
 
 #define N_ARRAY    20
 #define MAX_TEMP   30
@@ -78,13 +84,15 @@ int main(void)
     /* Initialise the LCD> */
     OSRAMInit( false );
 
-  	//OSRAMStringDraw("", 16, 1);
     // Crear las tareas
-    xTaskCreate(vTemperatureSensorTask, "TemperatureSensor", configSENSOR_STACK_SIZE, NULL, SENSOR_TASK_PRIORITY,  &xHandleSensorTask);
+    xTaskCreate(vTemperatureSensorTask, "Sensor", configSENSOR_STACK_SIZE, NULL, SENSOR_TASK_PRIORITY,  &xHandleSensorTask);
     xTaskCreate(vReceiverTask, "Filter", configFILTER_STACK_SIZE, NULL, RECEIVER_TASK_PRIORITY, &xHandleReceiverTask);
     xTaskCreate(vDisplayTask, "Display", configDISPLAY_STACK_SIZE, NULL, DISPLAY_TASK_PRIORITY, &xHandleDisplayTask);
+	//xTaskCreate(vUartTask, "UART", UART_TASK_STACK_SIZE, NULL, UART_TASK_PRIORITY, &xHandleUartTask);
+	xTaskCreate(vTopTask, "Top", configTOP_STACK_SIZE, NULL, TOP_TASK_PRIORITY, NULL);
 
-	xTaskCreate(vMonitorTask, "Monitor", configMONITOR_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+	// Tarea para obtener los valores minimos de stack:
+	//xTaskCreate(vMonitorTask, "Monitor", configMONITOR_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
 
 
     // Iniciar el scheduler de FreeRTOS
@@ -95,7 +103,6 @@ int main(void)
 }
 
 static void vTemperatureSensorTask(void *pvParameters) {
-    //const TickType_t xDelaySensor = mainSENSOR_DELAY;
     int temperature_value = MIN_TEMP;
     while (true) {
         /* Sensor gets temperature value */
@@ -132,56 +139,27 @@ static void vReceiverTask(void *pvParameters) {
         avg_temp = accum / getN();
         
         xQueueSend(xValFilterQueue, &avg_temp, portMAX_DELAY);
-        //xQueueSend(xDisplayQueue, &avg_temp, portMAX_DELAY);
     }
 }
 
 static void prvSetupHardware( void )
 {
-	// Configurar el reloj del sistema para usar el reloj principal
-	SysCtlClockSet( SYSCTL_SYSDIV_10 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_6MHZ );
-
-	/* Setup the push button. */
-	//SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
-    //GPIODirModeSet(GPIO_PORTC_BASE, mainPUSH_BUTTON, GPIO_DIR_MODE_IN);
-	//GPIOIntTypeSet( GPIO_PORTC_BASE, mainPUSH_BUTTON,GPIO_FALLING_EDGE );
-	//IntPrioritySet( INT_GPIOC, configKERNEL_INTERRUPT_PRIORITY );
-	//GPIOPinIntEnable( GPIO_PORTC_BASE, mainPUSH_BUTTON );
-	//IntEnable( INT_GPIOC );
-
-	// Habilitar el puerto UART0
+	/* Enable the UART.  */
 	SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-	//SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);// new new
-	GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);// new new
+	/* Configure the UART for 8-N-1 operation. 
+		8 bit word lenght, one stop bit, no parity*/
+	UARTConfigSet(UART0_BASE, mainBAUD_RATE, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
+	/* Enable the UART interrupt. */
+  	UARTIntEnable(UART0_BASE, UART_INT_RX);
+  	UARTIntEnable(UART0_BASE, UART_INT_TX);
 
-	/* Set GPIO A0 and A1 as peripheral function.  They are used to output the UART signals. */
-	//GPIODirModeSet( GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_DIR_MODE_HW );
-
-
-	/* Configure the UART for 8-N-1 operation.baudios.8 bits de datos, sin paridad y 1 bit de parada */
-	//UARTConfigSet( UART0_BASE, mainBAUD_RATE, (UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE )); // NEW
-	UARTConfigSet(UART0_BASE, mainBAUD_RATE,
-                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-
-  	//UARTIntEnable(UART0_BASE, UART_INT_RX); // NEW
-  	//UARTIntEnable(UART0_BASE, UART_INT_TX); // NEW
-
-	/* We don't want to use the fifo.  This is for test purposes to generate as many interrupts as possible. */
-	//HWREG( UART0_BASE + UART_O_LCR_H ) &= ~mainFIFO_SET;
-
-	/* Enable Tx interrupts. */
-	//HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;  // NEW
-    //HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX; // NEW
-
-	//IntPrioritySet( INT_UART0, configKERNEL_INTERRUPT_PRIORITY );  // NEW
-	//IntEnable( INT_UART0 );  // NEW
-
-
-    //OSRAMStringDraw("www.FreeRTOS.org", 0, 0);
-	//OSRAMStringDraw("LM3S811 demo", 16, 1);
+	/* Set priority for UART interrupt. */
+	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_TX;
+	HWREG( UART0_BASE + UART_O_IM ) |= UART_INT_RX;
+	IntPrioritySet(INT_UART0, configKERNEL_INTERRUPT_PRIORITY);
+	IntEnable(INT_UART0);
 }
 /*-----------------------------------------------------------*/
 
@@ -331,7 +309,6 @@ char* bitMapping(int valor) {
 }
 
 
-
 void vUART_ISR(void){
 	unsigned long ulStatus;
 
@@ -415,6 +392,78 @@ void Timer0IntHandler(void) {
 /* Get timer Ticks */
 unsigned long getTimerTicks(void) {
   	return ulHighFrequencyTimerTicks;
+}
+
+
+static void vTopTask(void *pvParameters) {
+	/*  obtiene el número total de tareas actualmente activas en el sistema.*/
+	UBaseType_t uxArraySize = uxTaskGetNumberOfTasks();
+
+	/* se solicita memoria suficiente para almacenar un array de estructuras */
+	pxTaskStatusArray = pvPortMalloc(uxArraySize * sizeof(TaskStatus_t));
+
+	while (true) {
+		volatile UBaseType_t uxArraySize, x;
+		unsigned long ulTotalRunTime, ulStatsAsPercentage;
+
+		if (pxTaskStatusArray != NULL) {
+			/* obtiene la cant de tareas para las cuales hay información sobre su estado. */
+			uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulTotalRunTime );
+
+			/* tiempo total de ejecución de todas las tareas desde el inicio del sistema 
+			dividido 100 para calculo de porcentaje*/
+			ulTotalRunTime /= 100UL;
+
+			/* Send via UART. */
+			sendUART0("\r");
+
+			if (ulTotalRunTime > 0) {/* para evitar divisiones por cero */
+				char* current_N[2] = {};
+				sendUART0("\r\n\r\n----------- ESTADISTICAS DE TAREAS  -----------\r\n\r\n");
+				sendUART0("Filter N: ");
+				sendUART0(itoa(getN(), current_N, 10)); // Actual valor de N
+				sendUART0("\r\n\r\n");
+				sendUART0("Tarea\tTiempo\tCPU%\tStack Libre\r\n");
+
+				/* recorre cada una de las tareas. */
+				for (x = 0; x < uxArraySize; x++) {
+					/* que porcetaje del tiempo total uso cada tarea. */
+					ulStatsAsPercentage = pxTaskStatusArray[x].ulRunTimeCounter / ulTotalRunTime;
+
+					char buffer[10];//8
+
+					/* se envian los nombres de cada tarea */
+					sendUART0(pxTaskStatusArray[x].pcTaskName);
+					sendUART0("\t");
+
+					/* se envian los tiempos(en ticks) de cada tarea */
+					itoa(pxTaskStatusArray[x].ulRunTimeCounter, buffer, 10);
+					sendUART0(buffer);
+					sendUART0("\t");
+
+					/* Se envia el uso de CPU% de cada tarea */
+					if (ulStatsAsPercentage > 0UL) {
+						itoa(ulStatsAsPercentage, buffer, 10);
+						sendUART0(buffer);
+						sendUART0("%\t");
+					} else {
+						/* If the percentage is zero here then the task has
+               			consumed less than 1% of the total run time. */
+						sendUART0("<1%\t");
+					}
+
+
+					/* Send Tasks Stack Free */
+					/* Closer to 0, closer to overflow */
+					itoa(uxTaskGetStackHighWaterMark(pxTaskStatusArray[x].xHandle), buffer, 10);
+					sendUART0(buffer);
+					sendUART0(" words\r\n");
+				}
+			}
+		}
+
+		vTaskDelay(mainTOP_DELAY); // 5 segundos
+	}
 }
 
 static void vMonitorTask(void *pvParameters) {
