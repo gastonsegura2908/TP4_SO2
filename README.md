@@ -83,7 +83,9 @@ int getN(void) {
 ---
 
 En **tercer** lugar se realiza una tarea, denominada  ` vDisplayTask`, que grafica en el display los valores de temperatura en el tiempo.
+
 ![image](https://github.com/user-attachments/assets/36dccd44-19a7-4b8e-b6ba-ce1f221b8667)
+
 Se crea un array del tamaño de la cantidad de columnas de display (96), y se va llenando a medida que va leyendo los valores que obtiene desde la cola que proviene de la tarea del filtrado; por lo tanto va actualizando ese array a medida que van llegando los valores y va mostrando en pantalla tanto el numero N, como el valor filtrado actual, y el grafico del valor en el tiempo, todo esto ayudandose con la funcion `bitMapping` . Esta funcion mapea los valores filtrados a un patron de bits, siguiendo el hecho de que el display esta compuesto por una pantalla de 96 columnas x 16 filas, las cuales estan dividas en dos, formando una pantalla superior(8 filas) y una pantalla inferior(8 filas); esas filas son 1 byte(8 bits) en vertical, el cual es el valor que devuelve la funcion bitMapping.
 
 ```
@@ -266,7 +268,9 @@ Para obtener los valores de stack necesario para cada task, hay que ir jugando c
 #define configDISPLAY_STACK_SIZE                  ((unsigned short) (245)) 
 ```
 y vemos que los valores devueltos son:
+
 ![image](https://github.com/user-attachments/assets/2e3ea63d-f0e3-4768-8493-ff8d7203a406)
+
 por lo tanto se pueden reducir aun mas los valores de la pila, pero siempre tratando de que la High Water Mark no llegue a cero y dejando un margen(Si los valores de High Water Mark se acercan a cero, es indicativo de que la pila es insuficiente por lo tanto se debe aumentar el valor). 
 Finalmente se llegan a estos valores de stack:
 ```
@@ -275,6 +279,7 @@ Finalmente se llegan a estos valores de stack:
 #define configDISPLAY_STACK_SIZE                  ((unsigned short) (150)) 
 ```
 ya que devolvieron los siguientes valores:
+
 ![image](https://github.com/user-attachments/assets/276a72dd-d123-41b9-9387-dc751b2bb5ae)
 
 ---
@@ -394,8 +399,11 @@ _**UART**_
 _**DISPLAY**_
 
 El display de 16x96 píxeles se divide en dos mitades: la parte superior (8x96) y la parte inferior (8x96). 
+
 ![image](https://github.com/user-attachments/assets/174e0874-a296-4296-87e6-d4aeadb59f98)
+
 La función OSRAMStringDraw por dentro utiliza la La función OSRAMWriteArray(g_pucFont[*pcStr - ' '], 5) la cual escribe los datos del carácter en 5 columnas + 1 columna de padding  en caso de que se haya ingresado mas de un caracter, por lo tanto si a la funcion OSRAMStringDraw le mandamos dos carcateres, estos ocuparan 11 columnas(del 0 al 10), con lo cual hay que arrancar en la columna 11 los graficos para no chocar con los primeros numeros.
+
 ![image](https://github.com/user-attachments/assets/d87ac9e5-6959-4a72-9e88-a74af7fb9154)
 
 ---
